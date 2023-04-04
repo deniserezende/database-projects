@@ -193,17 +193,6 @@ BEGIN
     END LOOP;
 END;
 
-
-
-
-    -- funcao para normalizar os nomes e colocar no log
-    -- For for ->
-    -- select todos os autors distinct
-    -- determinar o mais frequente guarda o nome mais frequente
-    -- select todos os autors distinct - um (o mais frequente por exemplo)
-    -- chama uma funcao que determina os nomes parecidos
-    -- no fim add no log
-
 CALL fix_author_name_bugs();
 
 SELECT * FROM denise.book;
