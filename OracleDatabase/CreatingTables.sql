@@ -33,7 +33,7 @@ CREATE TABLE denise.book (
 -- book_id, author_name
 -- DROP TABLE denise.book_authors CASCADE CONSTRAINTS;
 CREATE TABLE denise.book_authors(
-	book_id INT,
+	book_id INT UNIQUE,
 	author_name VARCHAR(100),
 	CONSTRAINT pk_book_authors PRIMARY KEY(book_id, author_name),
 	CONSTRAINT fk_book_id_ba FOREIGN KEY(book_id)

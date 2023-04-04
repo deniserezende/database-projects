@@ -6,8 +6,10 @@
 -- and show the state of the up-to-date materialized view.
 
 -- DROP MATERIALIZED VIEW denise.month_borrowers;
-CREATE MATERIALIZED VIEW denise.month_borrowers AS
-SELECT
+CREATE MATERIALIZED VIEW denise.month_borrowers
+BUILD IMMEDIATE
+REFRESH ON DEMAND
+AS SELECT
     t1.card_no,
     t1.person_name,
     t1.address,
@@ -79,51 +81,19 @@ SELECT * FROM denise.month_borrowers;
 
 
 
--- TRIGGER to update view when updates are made to the base tables
--- plus show the state of the up-to-date materialized view.
--- Creating function that will be called in the trigger
--- DROP FUNCTION update_month_borrowers
-CREATE OR REPLACE FUNCTION update_month_borrowers
-RETURN BOOLEAN
-AS
-BEGIN
-    DBMS_MVIEW.REFRESH('denise.month_borrowers');
-END;
-/
--- DROP TRIGGER borrower_base_table_changed;
-
-CREATE OR REPLACE TRIGGER BORROWER_BASE_TABLE_CHANGED
-AFTER INSERT OR DELETE OR UPDATE OF CARD_NO ON DENISE.BORROWER
-FOR EACH ROW
-BEGIN
-    UPDATE_MONTH_BORROWERS;
-END;
-/
-
-CREATE TRIGGER borrower_base_table_changed
-AFTER INSERT OR DELETE OR UPDATE OF card_no ON denise.borrower
-FOR EACH ROW
-BEGIN
-    update_month_borrowers();
-END;
-
--- DROP TRIGGER book_loans_base_table_changed
-CREATE TRIGGER book_loans_base_table_changed
-AFTER INSERT OR DELETE OR UPDATE OF card_no ON denise.book_loans
-FOR EACH ROW
-BEGIN
-    update_month_borrowers();
-END;
-/
-
-
-
-
 -- DATA TO TEST EXERCISE ONE:
-INSERT INTO denise.book_loans(book_id, branch_id, card_no, date_out, due_date)
-VALUES (3, 2, 2, '2022-01-03', '2022-02-03');
+SELECT * FROM denise.month_borrowers;
 
 INSERT INTO denise.book_loans(book_id, branch_id, card_no, date_out, due_date)
-VALUES (9, 3, 6, '2022-01-21', '2022-02-21');
+VALUES (3, 2, 2, TO_DATE('2022-01-03', 'YYYY-MM-DD'), TO_DATE('2022-02-03', 'YYYY-MM-DD'));
 
+INSERT INTO denise.book_loans(book_id, branch_id, card_no, date_out, due_date)
+VALUES (9, 3, 6, TO_DATE('2022-01-21', 'YYYY-MM-DD'), TO_DATE('2022-02-21', 'YYYY-MM-DD'));
 
+-- DELETE FROM denise.book_loans
+-- WHERE book_id = 9 AND branch_id = 3 AND card_no = 6 AND date_out = TO_DATE('2022-01-21', 'YYYY-MM-DD')
+-- AND due_date = TO_DATE('2022-02-21', 'YYYY-MM-DD');
+
+EXECUTE DBMS_MVIEW.REFRESH('denise.month_borrowers');
+
+SELECT * FROM denise.month_borrowers;

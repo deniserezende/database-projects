@@ -1,3 +1,5 @@
+
+-- Drop all tables
 BEGIN
   FOR cur_rec IN (SELECT object_name, object_type
                   FROM user_objects
@@ -18,3 +20,24 @@ END;
 
 COMMIT;
 /
+
+
+-- TRUNCATE TABLE BOOK;
+-- DELETE FROM PUBLISHER;
+-- DROP TABLE PUBLISHER CASCADE CONSTRAINTS;
+
+
+-- Drop all routines
+BEGIN
+    FOR routine IN (SELECT object_name, object_type FROM all_objects WHERE owner = 'DENISE' AND object_type IN ('PROCEDURE', 'FUNCTION'))
+    LOOP
+        EXECUTE IMMEDIATE 'DROP ' || routine.object_type || ' DENISE.' || routine.object_name;
+    END LOOP;
+END;
+/
+
+-- Drop Materialized View
+-- DROP MATERIALIZED VIEW '[NAME]'; -- MONTH_BORROWERS
+-- COMMIT;
+
+

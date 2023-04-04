@@ -50,59 +50,76 @@ CREATE TABLE denise.log_book_author_changes (
 
 
 -- parei aqui:
-
 -- Create function to determine if name should be changed (normalized)
-CREATE OR REPLACE FUNCTION names_should_be_normalized(full_name_one TEXT, full_name_two TEXT) RETURNS BOOLEAN AS $$
-DECLARE
-    authorOne_first_name TEXT;
-    authorOne_middle_name TEXT;
-    authorOne_last_name TEXT;
-    authorTwo_first_name TEXT;
-    authorTwo_middle_name TEXT;
-    authorTwo_last_name TEXT;
+CREATE OR REPLACE FUNCTION names_should_be_normalized
+    (fullNameOne VARCHAR2, fullNameTwo VARCHAR2)
+    RETURN BOOLEAN IS
+    authorOne_first_name VARCHAR2(100);
+    authorOne_middle_name VARCHAR2(100);
+    authorOne_last_name VARCHAR2(100);
+    authorTwo_first_name VARCHAR2(100);
+    authorTwo_middle_name VARCHAR2(100);
+    authorTwo_last_name VARCHAR2(100);
 
-    no_caracters_diff_first INT := 0;
-    no_caracters_diff_middle INT := 0;
-    no_caracters_diff_last INT := 0;
-    no_caracters_diff INT := 0;
+    no_characters_diff_first INT := 0;
+    no_characters_diff_middle INT := 0;
+    no_characters_diff_last INT := 0;
+    no_characters_diff INT := 0;
     max_diff INT := 2;
 BEGIN
     -- Separating first name, middle name, and last name for both authors
-    SELECT split_part(full_name_one, ' ', 1),
-           CASE WHEN split_part(full_name_one, ' ', 3) IS NOT NULL THEN split_part(full_name_one, ' ', 2) ELSE NULL END,
-           CASE WHEN split_part(full_name_one, ' ', 3) IS NOT NULL THEN split_part(full_name_one, ' ', 3) ELSE split_part(full_name_one, ' ', 2) END
-    INTO authorOne_first_name, authorOne_middle_name, authorOne_last_name;
+    SELECT
+        REGEXP_SUBSTR(fullNameOne, '[^ ]+', 1, 1),
+        CASE WHEN REGEXP_SUBSTR(fullNameOne, '[^ ]+', 1, 3) IS NOT NULL
+           THEN REGEXP_SUBSTR(fullNameOne, '[^ ]+', 1, 2)
+        END,
+        CASE WHEN REGEXP_SUBSTR(fullNameOne, '[^ ]+', 1, 3) IS NOT NULL
+           THEN REGEXP_SUBSTR(fullNameOne, '[^ ]+', 1, 3)
+           ELSE REGEXP_SUBSTR(fullNameOne, '[^ ]+', 1, 2)
+        END
+    INTO
+        authorOne_first_name, authorOne_middle_name, authorOne_last_name
+    FROM dual;
 
-    SELECT split_part(full_name_two, ' ', 1),
-           CASE WHEN split_part(full_name_two, ' ', 3) IS NOT NULL THEN split_part(full_name_two, ' ', 2) ELSE NULL END,
-           CASE WHEN split_part(full_name_two, ' ', 3) IS NOT NULL THEN split_part(full_name_two, ' ', 3) ELSE split_part(full_name_two, ' ', 2) END
-    INTO authorTwo_first_name, authorTwo_middle_name, authorTwo_last_name;
 
+    SELECT
+        REGEXP_SUBSTR(fullNameTwo, '[^ ]+', 1, 1),
+        CASE WHEN REGEXP_SUBSTR(fullNameTwo, '[^ ]+', 1, 3) IS NOT NULL
+           THEN REGEXP_SUBSTR(fullNameTwo, '[^ ]+', 1, 2)
+        END,
+        CASE WHEN REGEXP_SUBSTR(fullNameTwo, '[^ ]+', 1, 3) IS NOT NULL
+           THEN REGEXP_SUBSTR(fullNameTwo, '[^ ]+', 1, 3)
+           ELSE REGEXP_SUBSTR(fullNameTwo, '[^ ]+', 1, 2)
+        END
+    INTO
+        authorTwo_first_name, authorTwo_middle_name, authorTwo_last_name
+    FROM dual;
 
     -- Checking if both authors have the same amount of names
     -- If not return false and if true continue
-    IF (authorOne_middle_name IS NOT NULL AND authorTwo_middle_name IS NULL)
+    IF ((authorOne_middle_name IS NOT NULL AND authorTwo_middle_name IS NULL)
         OR (authorOne_middle_name IS NULL AND authorTwo_middle_name IS NOT NULL)
         OR (authorOne_last_name IS NOT NULL AND authorTwo_last_name IS NULL)
-        OR (authorOne_last_name IS NULL AND authorTwo_last_name IS NOT NULL) THEN
-        RAISE NOTICE 'Authors don''t have the same amount of names';
+        OR (authorOne_last_name IS NULL AND authorTwo_last_name IS NOT NULL)) THEN
+        DBMS_OUTPUT.PUT_LINE('Authors don''t have the same amount of names');
         RETURN FALSE;
     END IF;
 
+
     -- Checking if first name is equal or with typo
-    no_caracters_diff_first := levenshtein(lower(authorOne_first_name), lower(authorTwo_first_name));
+    no_characters_diff_first := levenshtein(lower(authorOne_first_name), lower(authorTwo_first_name));
 
     -- Checking if middle name is in the format A. (e.g.)
     IF (length(authorOne_middle_name) > 2) THEN
-        no_caracters_diff_middle := levenshtein(lower(authorOne_middle_name), lower(authorTwo_middle_name));
+        no_characters_diff_middle := levenshtein(lower(authorOne_middle_name), lower(authorTwo_middle_name));
     ELSE
-        IF (SUBSTRING(LEFT(authorOne_middle_name, 2), 2, 1) = '.') THEN
+        IF (SUBSTR(SUBSTR(authorOne_middle_name, 1, 2), 2, 1) = '.') THEN
             -- debug
-            --RAISE NOTICE 'Second character is a dot';
+            --DBMS_OUTPUT.PUT_LINE('Second character is a dot');
             -- Checking if the First letter is the same
-            IF (LEFT(authorOne_middle_name, 1) = LEFT(authorTwo_middle_name, 1)) THEN
+            IF (SUBSTR(authorOne_middle_name, 1, 1) = SUBSTR(authorTwo_middle_name, 1, 1)) THEN
                 -- debug
-                -- RAISE NOTICE 'First letters are the same';
+                DBMS_OUTPUT.PUT_LINE('First letters are the same');
                 -- continue
             ELSE
                 RETURN FALSE;
@@ -111,71 +128,59 @@ BEGIN
     END IF;
 
     -- Checking if last name is equal or with typo
-    no_caracters_diff_last := levenshtein(lower(authorOne_last_name), lower(authorTwo_last_name));
+    no_characters_diff_last := utl_match.edit_distance(lower(authorOne_last_name), lower(authorTwo_last_name));
 
     -- Sum of all diff
-    no_caracters_diff := no_caracters_diff + no_caracters_diff_first + no_caracters_diff_middle + no_caracters_diff_last;
+    no_characters_diff := no_characters_diff + no_characters_diff_first + no_characters_diff_middle + no_characters_diff_last;
 
-    -- If more then 2 differences return false else continue
-    IF(no_caracters_diff > max_diff) THEN
+    -- If more than 2 differences, return false else continue
+    IF(no_characters_diff > max_diff) THEN
         RETURN FALSE;
     END IF;
     RETURN TRUE;
-
 END;
-$$ LANGUAGE plpgsql;
 
 
 
--- funcao para normalizar os nomes e colocar no log
-    -- For for ->
-    -- select todos os autors distinct
-    -- determinar o mais frequente guarda o nome mais frequente
-    -- select todos os autors distinct - um (o mais frequente por exemplo)
-    -- chama uma funcao que determina os nomes parecidos
-    -- no fim add no log
-
-
-CREATE OR REPLACE FUNCTION fix_name_bugs() RETURNS VOID AS $$
-DECLARE
-    author record;
-    distinct_author record;
-    debug_i INT := 0;
-    amoutnOne INT;
-    amoutnTwo INT;
-    most_frequent TEXT;
-    less_frequent TEXT;
+CREATE OR REPLACE PROCEDURE fix_author_name_bugs AS
+    author denise.book_authors %ROWTYPE;
+    distinct_author denise.book_authors %ROWTYPE;
+    amountOne INT;
+    amountTwo INT;
     book_id_temp INT;
+    most_frequent VARCHAR2(200);
+    less_frequent VARCHAR2(200);
+    v_log_count NUMBER;
+    log_timestamp TIMESTAMP NULL;
 BEGIN
-    -- Selecting one by one a author from book_authors
-    FOR author IN (SELECT DISTINCT author_name FROM denise.book_authors) LOOP
-        -- Selecting one by one all other authors different from the first one from book_authors
-        FOR distinct_author IN (SELECT DISTINCT author_name FROM denise.book_authors WHERE author_name <> author.author_name) LOOP
+    DBMS_OUTPUT.PUT_LINE('beginning');
+    FOR author IN (SELECT DISTINCT author_name, book_id FROM denise.book_authors) LOOP
+        FOR distinct_author IN (SELECT DISTINCT author_name, book_id FROM denise.book_authors WHERE author_name <> author.author_name) LOOP
             -- Debug
-            -- RAISE NOTICE '% author=% distinct_author=% ', debug_i, author.author_name, distinct_author.author_name;
+            DBMS_OUTPUT.PUT_LINE('% author=' || author.author_name || ' distinct_author=' || distinct_author.author_name);
 
             -- Checking if author name should be corrected
             IF names_should_be_normalized(author.author_name, distinct_author.author_name) THEN
-                RAISE NOTICE 'Should nomalize: % author=% distinct_author=% ', debug_i, author.author_name, distinct_author.author_name;
+                DBMS_OUTPUT.PUT_LINE('Should normalize: author=' || author.author_name || ' distinct_author=' || distinct_author.author_name);
 
                 -- Getting the most frequent one
-                SELECT COUNT(*) INTO amoutnOne FROM denise.book_authors WHERE author_name = author.author_name;
-                SELECT COUNT(*) INTO amoutnTwo FROM denise.book_authors WHERE author_name = distinct_author.author_name;
-                IF amoutnOne > amoutnTwo THEN
+                SELECT COUNT(*) INTO amountOne FROM denise.book_authors WHERE author_name = author.author_name;
+                SELECT COUNT(*) INTO amountTwo FROM denise.book_authors WHERE author_name = distinct_author.author_name;
+                IF amountOne > amountTwo THEN
                     most_frequent := author.author_name;
                     less_frequent := distinct_author.author_name;
+                    book_id_temp := distinct_author.book_id;
                 ELSE
                     most_frequent := distinct_author.author_name;
                     less_frequent := author.author_name;
+                    book_id_temp := author.book_id;
                 END IF;
                 -- debug
-                -- RAISE NOTICE 'author_name most frequent %', most_frequent;
-                RAISE NOTICE 'author_name less frequent %', less_frequent;
+                -- DBMS_OUTPUT.PUT_LINE('author_name most frequent ' || most_frequent);
+                DBMS_OUTPUT.PUT_LINE('author_name less frequent ' || less_frequent);
 
                 -- Generating Log: Inserting in log table
-                SELECT book_id INTO book_id_temp FROM denise.book_authors WHERE author_name = less_frequent;
-                -- BUG: debug!!!
-                RAISE NOTICE 'book_id_temp %', book_id_temp;
+                -- BUG: inserting multiple times in log
                 INSERT INTO denise.log_book_author_changes (book_id, old_name, new_name)
                 VALUES (book_id_temp, less_frequent, most_frequent);
 
@@ -183,15 +188,25 @@ BEGIN
                 UPDATE denise.book_authors
                 SET author_name = most_frequent
                 WHERE author_name = less_frequent;
-
             END IF;
         END LOOP;
     END LOOP;
 END;
-$$ LANGUAGE plpgsql;
 
-SELECT fix_name_bugs();
 
+
+
+    -- funcao para normalizar os nomes e colocar no log
+    -- For for ->
+    -- select todos os autors distinct
+    -- determinar o mais frequente guarda o nome mais frequente
+    -- select todos os autors distinct - um (o mais frequente por exemplo)
+    -- chama uma funcao que determina os nomes parecidos
+    -- no fim add no log
+
+CALL fix_author_name_bugs();
+
+SELECT * FROM denise.book;
 SELECT * FROM denise.book_authors;
 SELECT * FROM denise.log_book_author_changes;
 
@@ -209,14 +224,17 @@ INSERT INTO denise.book (title, publisher_name) VALUES ('Book 7', 'Publisher 1')
 INSERT INTO denise.book (title, publisher_name) VALUES ('Book 8', 'Publisher 1');
 INSERT INTO denise.book (title, publisher_name) VALUES ('Book 9', 'Publisher 1');
 
-INSERT INTO denise.book_authors (book_id, author_name) VALUES (1, 'John Joseph Powell');
-INSERT INTO denise.book_authors (book_id, author_name) VALUES (2, 'John J. Powell');
-INSERT INTO denise.book_authors (book_id, author_name) VALUES (3, 'John Joseph Powel');
-INSERT INTO denise.book_authors (book_id, author_name) VALUES (4, 'John Joseph Powel');
-INSERT INTO denise.book_authors (book_id, author_name) VALUES (5, 'John Joseph Powel');
-INSERT INTO denise.book_authors (book_id, author_name) VALUES (6, 'John Joseph Powell');
-INSERT INTO denise.book_authors (book_id, author_name) VALUES (7, 'John Joseph Powell');
-INSERT INTO denise.book_authors (book_id, author_name) VALUES (8, 'John Joseph Powell');
-INSERT INTO denise.book_authors (book_id, author_name) VALUES (9, 'John Joseph Powell');
+SELECT * FROM denise.book;
+
+-- Verificar book_id inserido em cima
+INSERT INTO denise.book_authors (book_id, author_name) VALUES (11, 'John Joseph Powell');
+INSERT INTO denise.book_authors (book_id, author_name) VALUES (12, 'John J. Powell');
+INSERT INTO denise.book_authors (book_id, author_name) VALUES (13, 'John Joseph Powel');
+INSERT INTO denise.book_authors (book_id, author_name) VALUES (14, 'John Joseph Powel');
+INSERT INTO denise.book_authors (book_id, author_name) VALUES (15, 'John Joseph Powel');
+INSERT INTO denise.book_authors (book_id, author_name) VALUES (16, 'John Joseph Powell');
+INSERT INTO denise.book_authors (book_id, author_name) VALUES (17, 'John Joseph Powell');
+INSERT INTO denise.book_authors (book_id, author_name) VALUES (18, 'John Joseph Powell');
+INSERT INTO denise.book_authors (book_id, author_name) VALUES (19, 'John Joseph Powell');
 
 SELECT * FROM denise.book_authors;
